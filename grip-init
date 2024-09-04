@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-init
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 28/07/2024
+#
+# Overview:
+# This file is responsible for creating the .grip
+# directory where all the information about index,
+# branches, commits will be stored
+
+import os, sys
+
+# Error check for grip-init:
+# if .grip already exists. If so we should not
+# create another .grip and hence return a message
+# in stderr with exit status of 0
+def error_grip_init(curr_path):
+    if os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-init: error: .grip already exists", file=sys.stderr)
+        sys.exit(1)
+
+# Actions on the grip-init cmd given that we pass all
+# the error checks. The steps are as follows:
+# create .grip directory
+# create index, commits, branches in .grip
+# create trunk in branches 
+def run_grip_init(curr_path):
+    os.mkdir(f"{curr_path}/.grip")
+    print(f"Initialized empty grip repository in .grip")
+
+    # mkdir for "index" and "commits" and "branches"
+    os.mkdir(f"{curr_path}/.grip/index")
+    os.mkdir(f"{curr_path}/.grip/commits")
+    os.mkdir(f"{curr_path}/.grip/branches")
+
+    # This keeps track of which branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "w") as file:
+        file.write("trunk")
+
+    # Create default branch
+    os.mkdir(f"{curr_path}/.grip/branches/trunk")
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-init
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_init(curr_path)
+    run_grip_init(curr_path)
+
+if __name__ == "__main__":
+    main()

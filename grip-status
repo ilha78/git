@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-status
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 01/08/2024
+#
+# Overview:
+# grip-status shows the status of files in the current directory, 
+# the index, and the repository.
+
+import sys, re, os, filecmp
+
+# This helper takes in two paths to a file
+# and checks if they both exist. If so, compare 
+# their contents and if they are the same, then
+# return True, otherwise, False
+def files_are_same(filepath1, filepath2):
+    # the files cannot be the same if one of them does not exist
+    if not os.path.isfile(filepath1) or not os.path.isfile(filepath2):
+        return False
+    
+    if filecmp.cmp(filepath1, filepath2):
+        return True
+    else:
+        return False
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list of all commit numbers 
+# that are in the current branch
+def get_commit_num_list(curr_path):
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_list = get_list_of_files(src_branch_path)
+    return sorted(names_to_int(src_commit_list) ,reverse=True)
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This helper loops over the working files and categorises them
+# into the status that they belong in. This returns a dictionary
+# where the key is the file and value is the status
+def status_cases(curr_path, working_file_list, src_commit_path):
+    # dictionary to print out status of each file
+    file_to_status = {}
+    for file in working_file_list:
+        working_filepath = f"{curr_path}/{file}"
+        index_filepath = f"{curr_path}/.grip/index/{file}"
+        latest_commit_filepath = f"{src_commit_path}/{file}"
+
+        # check untracked:
+        if not os.path.isfile(index_filepath) and not os.path.isfile(latest_commit_filepath):
+            # print(f"{file} - untracked")
+            file_to_status[file] = "untracked"
+            continue
+        # file does not exists in latest commit
+        if not os.path.isfile(latest_commit_filepath):
+            if files_are_same(index_filepath, working_filepath):
+                file_to_status[file] = "added to index"
+                continue
+            else:
+                file_to_status[file] = "added to index, file changed"
+                continue
+        # file does not exist in index but exists in working and latest commit
+        # this implies that deletion in index occurred
+        if not os.path.isfile(index_filepath):
+            file_to_status[file] = "deleted from index"
+            continue
+        # working file and latest committed file is different
+        if not files_are_same(working_filepath, latest_commit_filepath):
+            # findex file is the same as latest commit
+            if files_are_same(index_filepath, latest_commit_filepath):
+                file_to_status[file] = "file changed, changes not staged for commit"
+                continue      
+        # index file is different from both working file and latest committed file
+        if not files_are_same(index_filepath, working_filepath) and not files_are_same(index_filepath, latest_commit_filepath):
+            file_to_status[file] = "file changed, different changes staged for commit"
+            continue
+        # latest committed file exists
+        if os.path.isfile(latest_commit_filepath):
+            # working file is same as index file but different to latest committed file
+            if files_are_same(index_filepath, working_filepath) and not files_are_same(index_filepath, latest_commit_filepath):
+                file_to_status[file] = "file changed, changes staged for commit"
+                continue 
+        # working, index, latest committed are all the same
+        if files_are_same(index_filepath, working_filepath) and files_are_same(index_filepath, latest_commit_filepath):
+            file_to_status[file] = "same as repo"
+            continue
+
+    return file_to_status
+
+# This helper prints out the result of file to status pair
+def print_status(file_to_status):
+    for file in sorted(file_to_status):
+        print(f"{file} - {file_to_status[file]}")
+
+# Error checks for grip-status:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_status(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-status: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+
+    # error check command line
+    if len(sys.argv) > 1:
+        print(f"usage: grip-status", file=sys.stderr)
+        sys.exit(1)
+
+# This will map each file to its respective status
+# and print it our in alphanumerical order
+def run_grip_status(curr_path):
+    src_commit_num = get_commit_num_list(curr_path)[0]
+    src_commit_path = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+
+    working_file_list = get_list_of_files(curr_path)
+    file_to_status = status_cases(curr_path, working_file_list, src_commit_path)
+    
+    # loop through index files to find missing working files
+    index_file_list = get_list_of_files(f"{curr_path}/.grip/index")
+    for file in index_file_list:
+        index_filepath = f"{curr_path}/.grip/index/{file}"
+        latest_commit_filepath = f"{src_commit_path}/{file}"
+
+        # file was not in working directory
+        if file not in file_to_status:
+            # file is not in latest commit
+            if not os.path.isfile(latest_commit_filepath):
+                file_to_status[file] = "added to index, file deleted"
+                continue
+            
+            # index file and latest commit files are same
+            if filecmp.cmp(index_filepath, latest_commit_filepath):               
+                file_to_status[file] = "file deleted"
+                continue
+            
+            else:
+                file_to_status[file] = "file deleted, changes staged for commit"
+                continue
+
+    # loop through latest commit files to find any missing index AND missing working files
+    latest_commit_list = get_list_of_files(src_commit_path)
+    for file in latest_commit_list:
+        if file == "_MESSAGE":
+            continue
+
+        working_filepath = f"{curr_path}/{file}"
+        # file was not in working and index
+        if file not in file_to_status:
+            file_to_status[file] = "file deleted, deleted from index"
+            continue
+    # print the result
+    print_status(file_to_status)   
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-commit
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_status(curr_path)
+    run_grip_status(curr_path)
+
+
+if __name__ == "__main__":
+    main()

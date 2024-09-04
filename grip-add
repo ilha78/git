@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-add
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 28/07/2024
+#
+# Overview:
+# This file is responsible for staging any
+# specified files into the index. 
+
+import os, sys, re, shutil
+
+# Error checks for grip-add:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_add(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-add: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+
+    # error check args less than 3
+    if len(sys.argv) < 2:
+        print(f"usage: grip-add <filenames>", file=sys.stderr)
+        sys.exit(1)
+    
+    # error check file starts with '-'
+    for file in sys.argv[1:]:
+        if re.search("^-", file):
+            print(f"usage: grip-add <filenames>", file=sys.stderr)
+            sys.exit(1)
+
+    for file in sys.argv[1:]:
+        # error check invalid regex
+        if not re.search("^[a-zA-Z0-9][a-zA-Z0-9._-]*", file):
+            print(f"grip-add: error: invalid filename '{file}'", file=sys.stderr)
+            sys.exit(1)
+        # error check file does not exist
+        if not os.path.isfile(file):
+            # check file is a directory
+            if os.path.isdir(file):
+                print(f"grip-add: error: '{file}' is not a regular file", file=sys.stderr)
+                sys.exit(1)
+
+            # check that file does not belong in index
+            elif not os.path.isfile(f"{curr_path}/.grip/index/{file}"):
+                print(f"grip-add: error: can not open '{file}'", file=sys.stderr)
+                sys.exit(1)
+
+# Actions on the grip-add cmd given that we pass all
+# the error checks. This will add files to the index
+# directory where it is staged
+def run_grip_add(curr_path):
+    # copy each file into index
+    for file in sys.argv[1:]:        
+        index_filepath = f"{curr_path}/.grip/index/{file}"
+        curr_filepath = f"{curr_path}/{file}"
+        # check if file is in index but not in current dir
+        if os.path.isfile(index_filepath) and not os.path.isfile(curr_filepath):
+            # remove it from index
+            os.remove(index_filepath)        
+        else:
+            shutil.copy(file, index_filepath)
+
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-add
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_add(curr_path)
+    run_grip_add(curr_path)
+
+if __name__ == "__main__":
+    main()

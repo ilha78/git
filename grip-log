@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-log
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 28/07/2024
+#
+# Overview:
+# This file is responsible in printing a line for every commit
+# made to the repository.Each line should contain the commit 
+# number and the commit message.
+
+import sys, re, os
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This helper returns a list of all commit numbers 
+# that are in the current branch
+def get_commit_num_list(curr_path):
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_list = get_list_of_files(src_branch_path)
+    return sorted(names_to_int(src_commit_list) ,reverse=True)
+
+# Error checks for grip-log:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_log(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-log: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+    # subsequent args not allowed
+    if len(sys.argv) > 1:
+        print(f"usage: grip-log", file=sys.stderr)
+        sys.exit(1)
+
+# After errors have been checked, we run grip-log
+# which will list out all the commits in the current
+# branch in descending order
+def run_grip_log(curr_path):
+    # get the list of all commits in curr branch
+    src_commit_num_list = get_commit_num_list(curr_path)    
+    for commit_num in src_commit_num_list:
+        src_commit_path = f"{curr_path}/.grip/commits/commit{commit_num}"
+        message_path = f"{src_commit_path}/_MESSAGE"
+        with open(message_path, "r") as message_file:
+            message = message_file.readline()
+        print(f"{commit_num} {message}")
+
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-log
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_log(curr_path)
+    run_grip_log(curr_path)
+
+if __name__ == "__main__":
+    main()

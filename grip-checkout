@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-branch
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 04/08/2024
+#
+# Overview:
+# grip-checkout switches branches under particular
+# cirumstances and updates the working, index, and
+# latest committed directories respectively
+
+import sys, re, os, shutil, filecmp
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list of all commit numbers 
+# that are in the specified branch
+def get_branch_num_list(curr_path, branch_name):
+    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    commit_list = get_list_of_files(branch_path)
+    return sorted(names_to_int(commit_list) ,reverse=True)
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This helper is used to print the files which are
+# in danger of being overwritten in alphanumerical order
+def print_file_list(file_list):
+    for file in sorted(file_list):
+        print(file, file=sys.stderr)
+
+# This helper checks and add any edited files from working directory and/or index
+# into the temporary directories such that we can preserve edited files
+def check_edited_files(curr_path, src_commit_path, potential_overwritten_dict):
+    list_src_files = get_list_of_files(src_commit_path)
+    for file in list_src_files:
+        if file == "_MESSAGE":
+            continue
+
+        src_file_path = f"{src_commit_path}/{file}"
+        work_file_path = f"{curr_path}/{file}"
+        index_file_path = f"{curr_path}/.grip/index/{file}"
+
+        # consider any files that have been edited in work or index
+        if os.path.isfile(work_file_path) and not filecmp.cmp(src_file_path, work_file_path):
+            shutil.copy(work_file_path, f"{curr_path}/.grip/SAVE_WORK_FILES/{file}")
+            potential_overwritten_dict[file] = "edited"
+        if os.path.isfile(index_file_path) and not filecmp.cmp(src_file_path, index_file_path):
+            shutil.copy(index_file_path, f"{curr_path}/.grip/SAVE_INDEX_FILES/{file}")
+            potential_overwritten_dict[file] = "edited"
+
+        # consider any files that have been deleted in work or index
+        if not os.path.isfile(work_file_path):
+            shutil.copy(src_file_path, f"{curr_path}/.grip/RM_WORK_FILES/{file}")
+            potential_overwritten_dict[file] = "edited"
+        if not os.path.isfile(index_file_path):
+            shutil.copy(src_file_path, f"{curr_path}/.grip/RM_INDEX_FILES/{file}")
+            potential_overwritten_dict[file] = "edited"
+
+
+# This helper checks and add any new files from working directory and/or index
+# into the temporary directories such that we can preserve new files
+def check_new_files(curr_path, src_commit_path, potential_overwritten_dict):
+    list_work_files = get_list_of_files(curr_path)
+    for file in list_work_files:
+        src_file_path = f"{src_commit_path}/{file}"
+        work_file_path = f"{curr_path}/{file}"
+
+        if not os.path.isfile(src_file_path):
+            shutil.copy(work_file_path, f"{curr_path}/.grip/SAVE_WORK_FILES/{file}")
+            potential_overwritten_dict[file] = "new"
+
+    # check for any newly added index files NOT present in src branch's latest commit
+    list_index_files = get_list_of_files(f"{curr_path}/.grip/index")
+    for file in list_index_files:
+        src_file_path = f"{src_commit_path}/{file}"
+        index_file_path = f"{curr_path}/.grip/index/{file}"
+        if not os.path.isfile(src_file_path):
+            shutil.copy(index_file_path, f"{curr_path}/.grip/SAVE_INDEX_FILES/{file}")
+            potential_overwritten_dict[file] = "new"
+
+
+# This helper is responsible for categorising files which can potentially
+# be overwritten. The two categories are if the file was edited or is 
+# new to the working directory
+def files_were_changed(src_commit_path, curr_path, potential_overwritten_dict):
+    # check and add any edited files from working directory and/or index
+    check_edited_files(curr_path, src_commit_path, potential_overwritten_dict)
+
+    # check and add any new files from working directory and/or index
+    check_new_files(curr_path, src_commit_path, potential_overwritten_dict)
+
+    temp_work_list = get_list_of_files(f"{curr_path}/.grip/SAVE_WORK_FILES")
+    temp_index_list = get_list_of_files(f"{curr_path}/.grip/SAVE_INDEX_FILES")
+    temp_rm_work_list = get_list_of_files(f"{curr_path}/.grip/RM_WORK_FILES")
+    temp_rm_index_list = get_list_of_files(f"{curr_path}/.grip/RM_INDEX_FILES")
+
+    if len(temp_work_list) > 0 or len(temp_index_list) > 0 or len(temp_rm_work_list) > 0 or len(temp_rm_index_list) > 0:       
+        return True
+    else:
+        return False
+
+# This helper removes files that are currently in the
+# current branch's working directory and index
+def delete_src_files(curr_path, src_commit_path):
+    list_src_files = get_list_of_files(src_commit_path)
+    for file in list_src_files:
+        if file == "_MESSAGE":
+            continue
+        if os.path.isfile(f"{curr_path}/{file}"):
+            os.remove(f"{curr_path}/{file}")
+        if os.path.isfile(f"{curr_path}/.grip/index/{file}"):
+            os.remove(f"{curr_path}/.grip/index/{file}")
+
+# This helper adds and overwrites files from the specified
+# branch into the current branch's working directory and index
+def add_dest_files(curr_path, dest_commit_path):
+    list_dest_files = get_list_of_files(dest_commit_path)
+    for file in list_dest_files:
+        if file == "_MESSAGE":
+            continue
+        dest_file_path = f"{dest_commit_path}/{file}"
+        work_file_path = f"{curr_path}/{file}"
+        index_file_path = f"{curr_path}/.grip/index/{file}"
+        shutil.copy(dest_file_path, work_file_path)
+        shutil.copy(dest_file_path, index_file_path)
+
+# This helper adds all files that were temporarily
+# put into save_path and removes all files that were
+# temporarily moved into rm_path
+def update_files(curr_path, save_path, rm_path, update_path):
+    list_save_files = get_list_of_files(save_path)
+    list_rm_files = get_list_of_files(rm_path)
+
+    for file in list_save_files:
+        update_file_path = f"{update_path}/{file}"
+        save_path_file = f"{save_path}/{file}"
+        shutil.copy(save_path_file, update_file_path)
+
+    for file in list_rm_files:
+        update_file_path = f"{update_path}/{file}"
+        if os.path.isfile(update_file_path):
+            os.remove(update_file_path)
+
+# This helper creates our four temporary directories
+# which will store any files that are different 
+# from the incoming files
+def create_temp_dirs(curr_path):
+    os.mkdir(f"{curr_path}/.grip/SAVE_WORK_FILES")
+    os.mkdir(f"{curr_path}/.grip/SAVE_INDEX_FILES")
+    os.mkdir(f"{curr_path}/.grip/RM_WORK_FILES")
+    os.mkdir(f"{curr_path}/.grip/RM_INDEX_FILES")
+
+# This helper removes our four temporary directories
+# given that the necessary information was translated
+# into the branch we are checking out to
+def remove_temp_dirs(curr_path):
+    shutil.rmtree(f"{curr_path}/.grip/SAVE_WORK_FILES")
+    shutil.rmtree(f"{curr_path}/.grip/SAVE_INDEX_FILES")
+    shutil.rmtree(f"{curr_path}/.grip/RM_WORK_FILES")
+    shutil.rmtree(f"{curr_path}/.grip/RM_INDEX_FILES")
+
+
+# Error checks for grip-checkout:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_checkout(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-checkout: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+
+    # running grip-checkout before first commit
+    commits_path = f"{curr_path}/.grip/commits"
+    commits_list = get_list_of_dirs(commits_path)
+    if len(commits_list) == 0:
+        print(f"grip-checkout: error: this command can not be run until after the first commit", file=sys.stderr)
+        sys.exit(1)
+    
+    # number of args was not 2
+    if not len(sys.argv) == 2:
+        print(f"usage: grip-checkout <branch>", file=sys.stderr)
+        sys.exit(1) 
+
+    # branch does not exist
+    branch_name = sys.argv[1]
+    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    if not os.path.exists(branch_path):
+        print(f"grip-checkout: error: unknown branch '{branch_name}'", file=sys.stderr)
+        sys.exit(1)
+
+
+# This function handles the potential dict of overwritten files into
+# definite list of overwritten files. If there are files in this definite list
+# then we cannot checkout and instead print all conflicting files in
+# alphanumerical order. Otherwise, prepare for the checkout 
+def handle_definite_overwritten_files(curr_path, src_commit_path, dest_commit_path, potential_overwritten_dict):
+    # add all files that are potentially danger of being overwritten
+    definite_overwritten_list = []
+    
+    for file, state in potential_overwritten_dict.items():
+        src_file_path = f"{src_commit_path}/{file}"
+        dest_file_path = f"{dest_commit_path}/{file}"
+        if state == "edited":
+            if os.path.isfile(dest_file_path) and not filecmp.cmp(src_file_path, dest_file_path):
+                definite_overwritten_list.append(file)
+        
+        if state == "new":
+            if os.path.isfile(dest_file_path):
+                definite_overwritten_list.append(file)
+
+    # we cannot checkout as work/index file was edited AND dest, src latest commits are diff
+    if len(definite_overwritten_list) > 0:
+        remove_temp_dirs(curr_path)
+
+        print(f"grip-checkout: error: Your changes to the following files would be overwritten by checkout:", file=sys.stderr)
+        print_file_list(definite_overwritten_list)
+        sys.exit(1)
+
+    # otherwise, load from dest branch's latest commit (preparing for checkout)
+    # but we keep the changes for the work & index files since dest & src commits are same
+    else:
+        delete_src_files(curr_path, src_commit_path)
+        add_dest_files(curr_path, dest_commit_path)
+
+        save_path = f"{curr_path}/.grip/SAVE_WORK_FILES"
+        rm_path = f"{curr_path}/.grip/RM_WORK_FILES"
+        update_files(curr_path, save_path, rm_path, curr_path)
+
+        save_path = f"{curr_path}/.grip/SAVE_INDEX_FILES"
+        rm_path = f"{curr_path}/.grip/RM_INDEX_FILES"
+        update_files(curr_path, save_path, rm_path, f"{curr_path}/.grip/index")
+
+
+# This function runs the bulk of grip-checkout whilst
+# still extended error checking like when you cannot
+# checkout due to files that can be overwritten
+def run_grip_checkout(curr_path):
+    src_branch_name = get_curr_branch_name(curr_path)
+    dest_branch_name = sys.argv[1]
+
+    if src_branch_name == dest_branch_name:
+        print(f"Already on '{src_branch_name}'")
+        sys.exit(0)
+    
+    else:
+        src_commit_num = get_branch_num_list(curr_path, src_branch_name)[0]
+        src_commit_path = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+        
+        dest_commit_num = get_branch_num_list(curr_path, dest_branch_name)[0]
+        dest_commit_path = f"{curr_path}/.grip/commits/commit{dest_commit_num}"
+
+        # create a temp dirs for potentially changed work and index files
+        create_temp_dirs(curr_path)
+        list_src_files = get_list_of_files(src_commit_path)        
+        potential_overwritten_dict = {}
+        # CASE: when work files or index files have changed cmp to latest commits in src branch
+        if files_were_changed(src_commit_path, curr_path, potential_overwritten_dict):
+            handle_definite_overwritten_files(curr_path, src_commit_path, dest_commit_path, potential_overwritten_dict)
+        
+        # CASE: no change in work/index cmp to src branch's latest commit 
+        # so simply load from dest branch's latest commit
+        else:
+            delete_src_files(curr_path, src_commit_path)
+            add_dest_files(curr_path, dest_commit_path)
+
+        remove_temp_dirs(curr_path)
+
+        # update CURRENT_BRANCH
+        with open(f"{curr_path}/.grip/CURRENT_BRANCH", "w") as file:
+            file.write(f"{dest_branch_name}")
+        print(f"Switched to branch '{dest_branch_name}'")
+        sys.exit(0)
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-checkout
+# note that the run function does additional error checks
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_checkout(curr_path)
+    run_grip_checkout(curr_path)
+
+if __name__ == "__main__":
+    main()

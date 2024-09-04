@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-commit
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 28/07/2024
+#
+# Overview:
+# The grip-commit command saves a copy of all files in the 
+# index to the repository. A message describing the commit must 
+# be included as part of the commit command. The -a option will
+# have all files in the index to have their contents added before
+# the commit
+
+import os, sys, re, shutil, filecmp
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list of all commit numbers 
+# that are in the current branch
+def get_commit_num_list(curr_path):
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_list = get_list_of_files(src_branch_path)
+    return sorted(names_to_int(src_commit_list) ,reverse=True)
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This handles the [-a] option by adding all files in current
+# directory into the index directory but if a file cannot be
+# found in the working directory, then delete the index file
+def add_all_index(curr_path, index_path):
+    # loop through each file in index_path
+    for index_file in os.listdir(index_path):
+        curr_filepath = os.path.join(curr_path, index_file)
+        # if a file is also in the curr_dir then add it to the index
+        index_filepath = os.path.join(index_path, index_file)
+        if os.path.isfile(curr_filepath):
+            shutil.copy(curr_filepath, index_filepath)
+        # else remove this file in index
+        else:
+            os.remove(index_filepath)
+
+# This helper returns the message that user inputted 
+# as conditioned by the specified sys.argv
+def get_message():
+    if len(sys.argv) == 3:
+        return sys.argv[2]
+    else:
+        return sys.argv[3]
+
+# This helper sets the message within the _MESSAGE file
+# of the specified commit directory
+def set_message(message_path, message):
+    with open(message_path, "w") as message_file:
+        message_file.write(f"{message}")
+
+# This helper checks in the case that there is a pre-existing 
+# commit whether or not we need to make a new commit. If there
+# are no changes that would satisfy a commit, then nothing to commit
+# otherwise we push on to make a commit
+def check_commit_req(curr_path, index_path, index_list):
+    src_commit_num = get_commit_num_list(curr_path)[0]
+    latest_commit = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+    latest_commit_list = get_list_of_files(latest_commit)
+    # for each index file, check in latest commit
+    for index_file in index_list:
+        index_filepath = f"{index_path}/{index_file}"
+        committed_filepath = f"{latest_commit}/{index_file}"
+        # check index file is not in latest commit or the files are different
+        if not os.path.isfile(committed_filepath) or not filecmp.cmp(index_filepath, committed_filepath):
+            return
+
+    # for each latest commit file, check in index
+    for committed_file in latest_commit_list:
+        # make sure to ignore _MESSAGE from being compared
+        if committed_file == "_MESSAGE":
+            continue
+
+        committed_filepath = os.path.join(latest_commit, committed_file)
+        index_filepath = os.path.join(index_path, committed_file)
+        # check that index file no longer exists in latest commit
+        # implying that index file was removed
+        if not os.path.isfile(index_filepath):
+            return
+            
+    print(f"nothing to commit")
+    sys.exit(0) 
+
+# This helper creates the new reference in the branch that
+# the commit was made on
+def create_commit_ref(curr_path, commit_num):
+    branch_name = get_curr_branch_name(curr_path)
+    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    with open(f"{branch_path}/{commit_num}", "w") as commit_ref:
+        commit_ref.write(f"successfully referenced commit{commit_num}")
+
+# This helper creates a new commit by making a directory in the commits
+# as well as adds a message in _MESSAGE. 
+def create_new_commit(curr_path, commits_path, commit_dirs_list, index_path, index_list):
+    commit_num = len(commit_dirs_list)
+    new_commit_path = os.path.join(commits_path, f"commit{commit_num}")
+    os.mkdir(new_commit_path)
+
+    # add all index files into new_commit_path
+    for index_file in index_list:
+        index_filepath = os.path.join(index_path, index_file)
+        shutil.copy(index_filepath, new_commit_path)
+    
+    message = get_message()
+    message_path = f"{new_commit_path}/_MESSAGE"
+    set_message(message_path, message)
+        
+    print(f"Committed as commit {commit_num}")
+
+    # we will also create a reference to this commit for our current branch
+    create_commit_ref(curr_path, commit_num)
+
+# Error checks for grip-commit:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_commit(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-commit: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+
+    # error check incorrect command using [-m] and/or [-a] option
+    if len(sys.argv) < 3:
+        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        sys.exit(1)        
+    if len(sys.argv) == 3 and sys.argv[1] != "-m":
+        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        sys.exit(1)    
+    if len(sys.argv) == 4:
+        if sys.argv[1] != "-a" or sys.argv[2] != "-m":
+            print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+            sys.exit(1)
+    if len(sys.argv) > 4:
+        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        sys.exit(1)
+
+# This is the core of running grip-commit where we will
+# exit with the status of 0. We first run checks to see if there is
+# nothing to commit. If we do need to make a commit, then add all files
+# from the index directory into the new commit directory
+def run_grip_commit(curr_path):
+
+    index_path = f"{curr_path}/.grip/index"
+    # [-a] flag case, add all files in index from current directory
+    # function that deals with -a
+    if sys.argv[1] == "-a":
+        add_all_index(curr_path, index_path)
+    # create list of files in index:
+    index_list = get_list_of_files(index_path)
+    # create list of commit_dirs in commits_path
+    commits_path = f"{curr_path}/.grip/commits"
+    commit_dirs_list = get_list_of_dirs(commits_path)        
+    
+    # if this is the first commit and there is no index files then 
+    # we have nothing to commit
+    if len(commit_dirs_list) == 0 and len(index_list) == 0:
+        print(f"nothing to commit")
+        sys.exit(0)
+    # check if a commit is even required or not
+    if len(commit_dirs_list) > 0:
+        check_commit_req(curr_path, index_path, index_list)      
+
+    # commit is definitely required so create a new commit dir
+    create_new_commit(curr_path, commits_path, commit_dirs_list, index_path, index_list)
+    sys.exit(0) 
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-commit
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_commit(curr_path)
+    run_grip_commit(curr_path)
+
+if __name__ == "__main__":
+    main()

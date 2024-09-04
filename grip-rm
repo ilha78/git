@@ -1,0 +1,261 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-rm
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 01/08/2024
+#
+# Overview:
+# grip-rm removes a file from the index, or, from the current directory and the index.
+# If the --cached option is specified, the file is removed only from the index, 
+# and not from the current directory. The --force option overrides this, and will carry 
+# out the removal even if the user will lose work.
+
+import sys, re, os, filecmp
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list of all commit numbers 
+# that are in the current branch
+def get_commit_num_list(curr_path):
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_list = get_list_of_files(src_branch_path)
+    return sorted(names_to_int(src_commit_list) ,reverse=True)
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This helper takes care of when file in working is not in the index     
+def in_working_not_index(index_path, latest_commit):
+    for file in sys.argv[1:]:
+        if re.search("^-", file):
+            continue
+        # check that there are no commits
+        if os.path.exists(latest_commit):
+            index_filepath = f"{index_path}/{file}"
+            latest_filepath = f"{latest_commit}/{file}"
+            # if not in index then error
+            if not os.path.isfile(index_filepath):
+                print(f"grip-rm: error: '{file}' is not in the grip repository", file=sys.stderr)
+                sys.exit(1) 
+
+# This helper takes care of when the file in working has same content
+# as index but diff to latest commit
+def index_diff_to_both(curr_path, index_path, latest_commit):
+    # index file is different from both working file and latest committed file
+    for file in sys.argv[1:]:
+        if re.search("^-", file):
+            continue
+
+        index_filepath = f"{index_path}/{file}"
+        if os.path.isfile(index_filepath):
+            working_filepath = f"{curr_path}/{file}"
+            latest_filepath = f"{latest_commit}/{file}"
+            if os.path.isfile(working_filepath) and os.path.isfile(latest_filepath):
+                if not filecmp.cmp(index_filepath, working_filepath) and not filecmp.cmp(index_filepath, latest_filepath):
+                    print(f"grip-rm: error: '{file}' in index is different to both the working file and the repository", file=sys.stderr)
+                    sys.exit(1)
+
+# This helper takes care of when the index file is different from
+# both working file and latest committed file
+def in_working_same_index_diff_latest(curr_path, index_path, latest_commit):
+    for file in sys.argv[1:]:
+        index_filepath = f"{index_path}/{file}"
+        working_filepath = f"{curr_path}/{file}"
+        if filecmp.cmp(index_filepath, working_filepath):
+            # either no commits yet or diff with latest commit
+            if not os.path.exists(latest_commit) or not os.path.isfile(f"{latest_commit}/{file}") or not filecmp.cmp(index_filepath, f"{latest_commit}/{file}"):
+                print(f"grip-rm: error: '{file}' has staged changes in the index", file=sys.stderr)
+                sys.exit(1)
+
+# This helper takes care of when the file is in the working directory
+# and the file is different to the latest commit
+def in_working_diff_latest(curr_path, latest_commit):
+    for file in sys.argv[1:]:
+        working_filepath = f"{curr_path}/{file}"
+        # check working file exists
+        if os.path.isfile(working_filepath):
+            # working file is diff with latest commit
+            if not os.path.exists(latest_commit) or not filecmp.cmp(working_filepath, f"{latest_commit}/{file}"):
+                print(f"grip-rm: error: '{file}' in the repository is different to the working file", file=sys.stderr)
+                sys.exit(1)
+
+# This helper error checks for option --force
+def force_error_grip_rm(curr_path):
+    index_path = f"{curr_path}/.grip/index"
+    src_commit_num = get_commit_num_list(curr_path)[0]
+    latest_commit = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+
+    # file in working is not in the index
+    in_working_not_index(index_path, latest_commit)
+ 
+# This helper error checks for option --cached
+def cached_error_grip_rm(curr_path):
+    index_path = f"{curr_path}/.grip/index"
+    src_commit_num = get_commit_num_list(curr_path)[0]
+    latest_commit = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+
+    # file in working is not in the index
+    in_working_not_index(index_path, latest_commit)
+
+    # index file is different from both working file and latest committed file
+    index_diff_to_both(curr_path, index_path, latest_commit)
+
+# This helper error checks for no options
+def error_grip_rm_no_option(curr_path):
+
+    index_path = f"{curr_path}/.grip/index"
+
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_list = get_list_of_files(src_branch_path)
+    src_commit_num = sorted(names_to_int(src_commit_list), reverse=True)[0]
+
+    latest_commit = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+
+    # file in working is not in the index
+    in_working_not_index(index_path, latest_commit)
+
+    # file in working has same content as index but diff to latest commit
+    in_working_same_index_diff_latest(curr_path, index_path, latest_commit)
+
+    # index file is different from both working file and latest committed file
+    index_diff_to_both(curr_path, index_path, latest_commit)
+
+    # file is in the working directory and the file is different to the latest commit
+    in_working_diff_latest(curr_path, latest_commit)
+
+# Error checks for grip-rm:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_rm(curr_path):
+    # error check .grip does not exist
+    if not os.path.exists(f"{curr_path}/.grip"):
+        print(f"grip-rm: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+
+    # error check command line
+    if len(sys.argv) == 1:
+        print(f"usage: grip-rm [--force] [--cached] <filenames>", file=sys.stderr)
+        sys.exit(1)
+    
+    # error single option
+    if len(sys.argv) == 2 and re.search("^-", sys.argv[1]):
+        print(f"usage: grip-rm [--force] [--cached] <filenames>", file=sys.stderr)
+        sys.exit(1)    
+
+    # error both options
+    if len(sys.argv) == 3 and re.search("^-", sys.argv[1]) and re.search("^-", sys.argv[2]):
+        print(f"usage: grip-rm [--force] [--cached] <filenames>", file=sys.stderr)
+        sys.exit(1)
+
+    # error more than "--" or "--" options are not force or cached
+    for arg in sys.argv[1:]:
+        if re.search("^---", arg):
+            print(f"usage: grip-rm [--force] [--cached] <filenames>", file=sys.stderr)
+            sys.exit(1)
+        # only target option "-"
+        if re.search("^-", arg):
+            # allow "--" as it means no option
+            if not re.search("^--force", arg) and not re.search("^--cached", arg) and not re.search("^--$", arg):
+                print(f"usage: grip-rm [--force] [--cached] <filenames>", file=sys.stderr)
+                sys.exit(1)        
+    
+    # any incorrect args with "-" has already been checked
+    # error check invalid filename, we are only interested in args with no "-"
+    for file in sys.argv[1:]:
+        # only target non-option i.e. file
+        if not re.search("^-", file) and not re.search("[a-zA-Z0-9]+[a-zA-Z0-9._-]*", file):
+            print(f"grip-rm: error: invalid filename '{file}'", file=sys.stderr)
+            sys.exit(1)
+    
+# This helper runs the action of grip-rm with no options
+# and can be conditioned to run on --force
+def run_grip_rm_no_option(curr_path, index_path):
+    for file in sys.argv[1:]:
+        index_filepath = f"{index_path}/{file}"
+        if os.path.isfile(index_filepath):
+            os.remove(index_filepath)
+
+        working_filepath = f"{curr_path}/{file}"
+        if os.path.isfile(working_filepath):
+            os.remove(working_filepath)
+    sys.exit(0) 
+
+# This helper runs the action of grip-rm with --cached
+# and can be conditioned to run with --force
+def run_grip_rm_cached(index_path):
+    for file in sys.argv[1:]:
+        if re.search("^-", file):
+            continue
+        index_filepath = f"{index_path}/{file}"
+        if os.path.isfile(index_filepath):
+            os.remove(index_filepath)
+    sys.exit(0)
+
+# Here we perform more technical error checks that consider
+# the file in the working, index, latest commit
+# There are four main cases: no options, force, cached, force and cached
+def run_grip_rm(curr_path):
+    index_path = f"{curr_path}/.grip/index"
+    # check errors for no option
+    if re.search("^--$", sys.argv[1]) or not re.search("^-", sys.argv[1]):
+        error_grip_rm_no_option(curr_path)
+        # successful case with no option
+        run_grip_rm_no_option(curr_path, index_path)
+
+    # check errors for --force
+    if re.search("^--force$", sys.argv[1]):
+        force_error_grip_rm(curr_path)
+        # successful case with force
+        if re.search("^--cached$", sys.argv[2]):
+            run_grip_rm_cached(index_path)
+        else:
+            run_grip_rm_no_option(curr_path, index_path)
+
+    # check errors for --cached
+    if re.search("^--cached$", sys.argv[1]):# or re.search("^--cached$", sys.argv[2]):
+        cached_error_grip_rm(curr_path)
+        # successful case with cached
+        run_grip_rm_cached(index_path)
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-rm
+# note that the run function does additional error checks
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_rm(curr_path)
+    run_grip_rm(curr_path)
+
+if __name__ == "__main__":
+    main()

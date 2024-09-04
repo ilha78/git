@@ -1,0 +1,312 @@
+#!/usr/bin/env python3
+
+# Assignment 2: Grip
+# grip-merge
+#
+# This program was written by ILHA JUNG (z5421387)
+# <z5421387@ad.unsw.edu.au> on 05/08/2024
+#
+# Overview:
+# grip-merge adds the changes that have been made to the 
+# specified branch or commit to the index, and commits them.
+
+import sys, os, re, filecmp, shutil
+
+# This helper returns the name of the current branch
+def get_curr_branch_name(curr_path):
+    # get the branch we are currently on
+    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+        return file.readline()  
+
+# This helper returns a list of all the directories
+# within the specified path
+def get_list_of_dirs(pathname):
+    dir_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames in os.walk(pathname):
+            dir_list = dirnames
+            break
+    return dir_list
+
+# This helper returns a list of all the files
+# within the specified path
+def get_list_of_files(pathname):
+    file_list = []
+    if os.path.exists(pathname):
+        for dirpath, dirnames, filenames, in os.walk(pathname):
+            file_list = filenames
+            break
+    return file_list 
+
+# This helper returns a list of all commit numbers 
+# that are in the specified branch
+def get_branch_num_list(curr_path, branch_name):
+    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    commit_list = get_list_of_files(branch_path)
+    return sorted(names_to_int(commit_list) ,reverse=True)
+
+# This helper returns a list where the string
+# representing is converted to type int
+def names_to_int(list_files):
+    return [ int(file) for file in list_files ]
+
+# This helper is used to print the files which are
+# unmergeable in alphanumerical order
+def print_file_list(file_list):
+    for file in sorted(file_list):
+        print(file, file=sys.stderr)
+    
+# This helper returns the message that user inputted 
+# as conditioned by the specified sys.argv
+def get_message():
+    if len(sys.argv) == 3:
+        return sys.argv[2]
+    else:
+        return sys.argv[3]
+
+# This helper sets the message within the _MESSAGE file
+# of the specified commit directory
+def set_message(message_path, message):
+    with open(message_path, "w") as message_file:
+        message_file.write(f"{message}")
+
+
+# Error checks for grip-merge:
+# These checks are done prior to making any changes
+# such that if an error hits then we exit with an
+# error message to stderr and exit status of 1
+def error_grip_merge(curr_path):
+    # error check .grip does not exist
+    grip_dir = os.path.join(curr_path, ".grip")
+    if not os.path.exists(grip_dir):
+        print(f"grip-merge: error: grip repository directory .grip not found", file=sys.stderr)
+        sys.exit(1)
+    # running grip-checkout before first commit
+    commits_path = f"{curr_path}/.grip/commits"
+    commits_list = get_list_of_dirs(commits_path)
+    if len(commits_list) == 0:
+        print(f"grip-merge: error: this command can not be run until after the first commit", file=sys.stderr)
+        sys.exit(1)
+    
+    if len(sys.argv) == 2:
+        print(f"grip-merge: error: empty commit message", file=sys.stderr)
+        sys.exit(1)
+
+    if not len(sys.argv) == 4 or not sys.argv[2] == "-m":
+        print(f"usage: grip-merge <branch|commit> -m message", file=sys.stderr)
+        sys.exit(1)
+    
+    if re.search(r"^\d+$", sys.argv[1]):
+        # commit does not exist
+        commit_num = sys.argv[1]
+        commit_path = f"{curr_path}/.grip/commits/commit{commit_num}"
+        if not os.path.exists(commit_path):
+            print(f"grip-merge: error: unknown commit '{commit_num}'", file=sys.stderr)
+            sys.exit(1)    
+    else:
+        # branch does not exist
+        branch_name = sys.argv[1]
+        branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+        if not os.path.exists(branch_path):
+            print(f"grip-merge: error: unknown branch '{branch_name}'", file=sys.stderr)
+            sys.exit(1)
+
+
+# This helper adds and overwrites files from the specified
+# branch into the current branch's working directory and index
+def add_dest_files(curr_path, dest_commit_path):
+    list_dest_files = get_list_of_files(dest_commit_path)
+    for file in list_dest_files:
+        if file == "_MESSAGE":
+            continue
+        dest_file_path = f"{dest_commit_path}/{file}"
+        work_file_path = f"{curr_path}/{file}"
+        index_file_path = f"{curr_path}/.grip/index/{file}"
+        shutil.copy(dest_file_path, work_file_path)
+        shutil.copy(dest_file_path, index_file_path)
+
+# This helper adds files by copying from the from_path
+# into the new_commit_path
+def add_files(curr_path, file_list, from_path, new_commit_path):
+    for file in file_list:
+        new_commit_file_path = f"{new_commit_path}/{file}"
+        from_file_path = f"{from_path}/{file}"
+        if not os.path.isfile(new_commit_file_path):
+            shutil.copy(from_file_path, new_commit_file_path)
+
+# This helper find a branch that this commit number belongs in and
+# make it the parent and create a dest commit list which only
+# considers commits less than the specified commit when 
+# finding for the ancestor. This returns the name of the branch
+def get_branch_name(curr_path, dest_commit_num):
+    branches_list = get_list_of_dirs(f"{curr_path}/.grip/branches")
+    for branch_name in branches_list:
+        branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+        if os.path.isfile(f"{branch_path}/{dest_commit_num}"):
+            return branch_name
+
+# This helper creates the new reference in the branch that
+# the commit was made on
+def create_commit_ref(curr_path, commit_num):
+    branch_name = get_curr_branch_name(curr_path)
+    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    with open(f"{branch_path}/{commit_num}", "w") as commit_ref:
+        commit_ref.write(f"successfully referenced commit{commit_num}")
+
+# This helper makes a fast forward merge which means it does not create 
+# a commit, rather it will store all commit refereces and changes coming into it
+def fast_forward_merge(curr_path, src_branch_path, dest_branch_path, dest_commit_num_list):
+    # add all dest commit ref in src commit ref
+    for commit_num in dest_commit_num_list:
+        shutil.copy(f"{dest_branch_path}/{commit_num}", f"{src_branch_path}/{commit_num}")
+    
+    print("Fast-forward: no commit created")
+    sys.exit(0)
+
+# This helper returns the list of when path1 and path2
+# contain files that are not matching in content
+def get_changed_files_list(curr_path, path1, path2):
+    changed_files_list = []
+   
+    list_files = get_list_of_files(path1)
+    for file in list_files:
+        if file == "_MESSAGE":
+            continue
+        filepath1 = f"{path1}/{file}"
+        filepath2 = f"{path2}/{file}"
+
+        # we only care about files that existed before
+        if os.path.isfile(filepath2) and not filecmp.cmp(filepath1, filepath2):
+            changed_files_list.append(file)
+    return changed_files_list
+
+# This helper returns a list of all files that make up the reason why
+# the merge cannot proceed
+def get_unmergeable_list(src_commit_path, dest_commit_path, filtered_file_list):
+    unmergeable_file_list = []
+    for file in filtered_file_list:
+        src_file_path = f"{src_commit_path}/{file}"
+        dest_file_path = f"{dest_commit_path}/{file}"
+        if os.path.isfile(dest_file_path) and not filecmp.cmp(src_file_path, dest_file_path):
+            unmergeable_file_list.append(file)
+    return unmergeable_file_list
+
+# Find the most recent common ancestor to both branches
+# cmp each file in this common commit with latest src commit
+# list all the files that are different
+# compare these files (latest src ver) with the files in the latest dest commit
+# if they are different then we cannot merge these files, else we can commit merge
+def handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list, src_commit_path, dest_commit_path):
+    for src_commit_num in src_commit_num_list:
+        if src_commit_num in dest_commit_num_list:
+            common_commit_num = src_commit_num
+            break
+    ancestor_commit_path = f"{curr_path}/.grip/commits/commit{common_commit_num}"
+
+    # list all files that are different in common ancestor to latest src commit
+    changed_src_files_list = get_changed_files_list(curr_path, src_commit_path, ancestor_commit_path)        
+    # list all files that are different in common ancestor to latest dest commit
+    changed_dest_files_list = get_changed_files_list(curr_path, dest_commit_path, ancestor_commit_path)     
+    # now take the intersection of the two lists
+    filtered_file_list = [ file for file in changed_src_files_list if file in changed_dest_files_list ]
+    # list all latest src files in changed_files_list that are also different when cmp to latest dest commit
+    unmergeable_file_list = get_unmergeable_list(src_commit_path, dest_commit_path, filtered_file_list)
+
+    # cannot merge
+    if len(unmergeable_file_list) > 0:
+        print("grip-merge: error: These files can not be merged:", file=sys.stderr)
+        print_file_list(unmergeable_file_list)
+        sys.exit(1)    
+        
+    # create a new commit
+    else:
+        list_src_files = get_list_of_files(src_commit_path)
+        list_dest_files = get_list_of_files(dest_commit_path)
+        new_commit_num = len(get_list_of_dirs(f"{curr_path}/.grip/commits"))
+        new_commit_path = f"{curr_path}/.grip/commits/commit{new_commit_num}"
+        os.mkdir(new_commit_path)
+        # add all the changed files from src
+        add_files(curr_path, changed_src_files_list, src_commit_path, new_commit_path)
+        # add all the changed files from dest
+        add_files(curr_path, changed_dest_files_list, dest_commit_path, new_commit_path)
+        # add any additional files from src but make sure not to overwrite existing files
+        add_files(curr_path, list_src_files, src_commit_path, new_commit_path)
+        # add any additional files from dest but make sure not to overwrite existing files
+        add_files(curr_path, list_dest_files, dest_commit_path, new_commit_path)
+
+        # update the work/index according to the new commit
+        add_dest_files(curr_path, new_commit_path)
+        # add the message
+        message = get_message()
+        message_path = f"{new_commit_path}/_MESSAGE"
+        set_message(message_path, message)
+        # reference this commit in the new branch
+        create_commit_ref(curr_path, new_commit_num)
+        # reference all commits in dest
+        for commit_num in dest_commit_num_list:
+            create_commit_ref(curr_path, commit_num)
+        print(f"Committed as commit {new_commit_num}")
+        sys.exit(0) 
+
+
+# There are three main cases to the grip-merge.
+# Already up to date, fast-forwarding, considering common ancestor
+# If incoming branch already belongs in the current branch then no need to merge
+# Otherwise merge by fast forward or by committing. 
+def run_grip_merge(curr_path):
+    # CASE: may or may not be merged
+    # src branch's latest commit should be in one of dest branch's commits
+    # otherwise there may be files which were changed and cannot be merged
+    src_branch_name = get_curr_branch_name(curr_path)
+    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_commit_num_list = get_branch_num_list(curr_path, src_branch_name)
+    src_commit_num = src_commit_num_list[0]
+    src_commit_path = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+    
+    # consider if we were given a commit number
+    if re.search(r"^\d+$", sys.argv[1]):
+        dest_commit_num = int(sys.argv[1])
+        if dest_commit_num in src_commit_num_list:
+            print("Already up to date")
+            sys.exit(0)
+
+        # find the branch name of specificed commit num
+        dest_branch_name = get_branch_name(curr_path, dest_commit_num)
+    
+    # otherwise, we are simply given the branch name
+    else:
+        dest_branch_name = sys.argv[1]
+
+    dest_branch_path = f"{curr_path}/.grip/branches/{dest_branch_name}"
+    dest_commit_num_list = get_branch_num_list(curr_path, dest_branch_name)
+    dest_commit_num = dest_commit_num_list[0]
+    dest_commit_path = f"{curr_path}/.grip/commits/commit{dest_commit_num}"
+
+    # if dest latest commit already exists as one of src commits, then no need to update
+    if dest_commit_num in src_commit_num_list:
+        print("Already up to date")
+        sys.exit(0)
+
+    # if src latest commit is the ancestor of dest then fast-forward merge
+    if src_commit_num in dest_commit_num_list:
+        # add dest latest commit into src's commit list by entering commit reference
+        create_commit_ref(curr_path, dest_commit_num)
+        # update the index and working to include the updated/new files
+        add_dest_files(curr_path, dest_commit_path)
+        fast_forward_merge(curr_path, src_branch_path, dest_branch_path, dest_commit_num_list)    
+    
+    # otherwise, we need to commit when merging so find common ancestor
+    else:
+        handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list, src_commit_path, dest_commit_path)
+        
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on grip-merge
+# note that the run function does additional error checks
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_grip_merge(curr_path)
+    run_grip_merge(curr_path)
+
+if __name__ == "__main__":
+    main()
