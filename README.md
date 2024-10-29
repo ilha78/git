@@ -30,6 +30,6 @@ Run `PATH="$PATH:$(pwd)"` to avoid having to prefix `./` for each script executi
 
 ## Learn More
 
-You can learn more about git through [Git Documentation](https://git-scm.com/)
+The details can be found in the [Git Documentation](https://git-scm.com/)
 
-I learnt lots from [Atlassian Explains Git](https://www.atlassian.com/git/glossary#commands) and more commands could be implemented.
+I learnt lots from [Atlassian Explains Git](https://www.atlassian.com/git/glossary#commands) and further commands can be implemented.
