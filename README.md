@@ -27,3 +27,7 @@ Run `PATH="$PATH:$(pwd)"` to avoid having to prefix `./` for each script executi
 `git-checkout`
 
 `git-merge`
+
+## Learn More
+
+You can learn more about git through [Git Documentation](https://git-scm.com/)
