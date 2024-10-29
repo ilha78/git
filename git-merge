@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 
-# Assignment 2: Grip
-# grip-merge
-#
-# This program was written by ILHA JUNG (z5421387)
-# <z5421387@ad.unsw.edu.au> on 05/08/2024
-#
 # Overview:
-# grip-merge adds the changes that have been made to the 
+# git-merge adds the changes that have been made to the 
 # specified branch or commit to the index, and commits them.
 
 import sys, os, re, filecmp, shutil
@@ -15,7 +9,7 @@ import sys, os, re, filecmp, shutil
 # This helper returns the name of the current branch
 def get_curr_branch_name(curr_path):
     # get the branch we are currently on
-    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+    with open(f"{curr_path}/.git/CURRENT_BRANCH", "r") as file:
         return file.readline()  
 
 # This helper returns a list of all the directories
@@ -41,7 +35,7 @@ def get_list_of_files(pathname):
 # This helper returns a list of all commit numbers 
 # that are in the specified branch
 def get_branch_num_list(curr_path, branch_name):
-    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    branch_path = f"{curr_path}/.git/branches/{branch_name}"
     commit_list = get_list_of_files(branch_path)
     return sorted(names_to_int(commit_list) ,reverse=True)
 
@@ -71,44 +65,44 @@ def set_message(message_path, message):
         message_file.write(f"{message}")
 
 
-# Error checks for grip-merge:
+# Error checks for git-merge:
 # These checks are done prior to making any changes
 # such that if an error hits then we exit with an
 # error message to stderr and exit status of 1
-def error_grip_merge(curr_path):
-    # error check .grip does not exist
-    grip_dir = os.path.join(curr_path, ".grip")
-    if not os.path.exists(grip_dir):
-        print(f"grip-merge: error: grip repository directory .grip not found", file=sys.stderr)
+def error_git_merge(curr_path):
+    # error check .git does not exist
+    git_dir = os.path.join(curr_path, ".git")
+    if not os.path.exists(git_dir):
+        print(f"git-merge: error: git repository directory .git not found", file=sys.stderr)
         sys.exit(1)
-    # running grip-checkout before first commit
-    commits_path = f"{curr_path}/.grip/commits"
+    # running git-checkout before first commit
+    commits_path = f"{curr_path}/.git/commits"
     commits_list = get_list_of_dirs(commits_path)
     if len(commits_list) == 0:
-        print(f"grip-merge: error: this command can not be run until after the first commit", file=sys.stderr)
+        print(f"git-merge: error: this command can not be run until after the first commit", file=sys.stderr)
         sys.exit(1)
     
     if len(sys.argv) == 2:
-        print(f"grip-merge: error: empty commit message", file=sys.stderr)
+        print(f"git-merge: error: empty commit message", file=sys.stderr)
         sys.exit(1)
 
     if not len(sys.argv) == 4 or not sys.argv[2] == "-m":
-        print(f"usage: grip-merge <branch|commit> -m message", file=sys.stderr)
+        print(f"usage: git-merge <branch|commit> -m message", file=sys.stderr)
         sys.exit(1)
     
     if re.search(r"^\d+$", sys.argv[1]):
         # commit does not exist
         commit_num = sys.argv[1]
-        commit_path = f"{curr_path}/.grip/commits/commit{commit_num}"
+        commit_path = f"{curr_path}/.git/commits/commit{commit_num}"
         if not os.path.exists(commit_path):
-            print(f"grip-merge: error: unknown commit '{commit_num}'", file=sys.stderr)
+            print(f"git-merge: error: unknown commit '{commit_num}'", file=sys.stderr)
             sys.exit(1)    
     else:
         # branch does not exist
         branch_name = sys.argv[1]
-        branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+        branch_path = f"{curr_path}/.git/branches/{branch_name}"
         if not os.path.exists(branch_path):
-            print(f"grip-merge: error: unknown branch '{branch_name}'", file=sys.stderr)
+            print(f"git-merge: error: unknown branch '{branch_name}'", file=sys.stderr)
             sys.exit(1)
 
 
@@ -121,7 +115,7 @@ def add_dest_files(curr_path, dest_commit_path):
             continue
         dest_file_path = f"{dest_commit_path}/{file}"
         work_file_path = f"{curr_path}/{file}"
-        index_file_path = f"{curr_path}/.grip/index/{file}"
+        index_file_path = f"{curr_path}/.git/index/{file}"
         shutil.copy(dest_file_path, work_file_path)
         shutil.copy(dest_file_path, index_file_path)
 
@@ -139,9 +133,9 @@ def add_files(curr_path, file_list, from_path, new_commit_path):
 # considers commits less than the specified commit when 
 # finding for the ancestor. This returns the name of the branch
 def get_branch_name(curr_path, dest_commit_num):
-    branches_list = get_list_of_dirs(f"{curr_path}/.grip/branches")
+    branches_list = get_list_of_dirs(f"{curr_path}/.git/branches")
     for branch_name in branches_list:
-        branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+        branch_path = f"{curr_path}/.git/branches/{branch_name}"
         if os.path.isfile(f"{branch_path}/{dest_commit_num}"):
             return branch_name
 
@@ -149,7 +143,7 @@ def get_branch_name(curr_path, dest_commit_num):
 # the commit was made on
 def create_commit_ref(curr_path, commit_num):
     branch_name = get_curr_branch_name(curr_path)
-    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    branch_path = f"{curr_path}/.git/branches/{branch_name}"
     with open(f"{branch_path}/{commit_num}", "w") as commit_ref:
         commit_ref.write(f"successfully referenced commit{commit_num}")
 
@@ -201,7 +195,7 @@ def handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list,
         if src_commit_num in dest_commit_num_list:
             common_commit_num = src_commit_num
             break
-    ancestor_commit_path = f"{curr_path}/.grip/commits/commit{common_commit_num}"
+    ancestor_commit_path = f"{curr_path}/.git/commits/commit{common_commit_num}"
 
     # list all files that are different in common ancestor to latest src commit
     changed_src_files_list = get_changed_files_list(curr_path, src_commit_path, ancestor_commit_path)        
@@ -214,7 +208,7 @@ def handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list,
 
     # cannot merge
     if len(unmergeable_file_list) > 0:
-        print("grip-merge: error: These files can not be merged:", file=sys.stderr)
+        print("git-merge: error: These files can not be merged:", file=sys.stderr)
         print_file_list(unmergeable_file_list)
         sys.exit(1)    
         
@@ -222,8 +216,8 @@ def handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list,
     else:
         list_src_files = get_list_of_files(src_commit_path)
         list_dest_files = get_list_of_files(dest_commit_path)
-        new_commit_num = len(get_list_of_dirs(f"{curr_path}/.grip/commits"))
-        new_commit_path = f"{curr_path}/.grip/commits/commit{new_commit_num}"
+        new_commit_num = len(get_list_of_dirs(f"{curr_path}/.git/commits"))
+        new_commit_path = f"{curr_path}/.git/commits/commit{new_commit_num}"
         os.mkdir(new_commit_path)
         # add all the changed files from src
         add_files(curr_path, changed_src_files_list, src_commit_path, new_commit_path)
@@ -249,19 +243,19 @@ def handle_common_ancestor(curr_path, src_commit_num_list, dest_commit_num_list,
         sys.exit(0) 
 
 
-# There are three main cases to the grip-merge.
+# There are three main cases to the git-merge.
 # Already up to date, fast-forwarding, considering common ancestor
 # If incoming branch already belongs in the current branch then no need to merge
 # Otherwise merge by fast forward or by committing. 
-def run_grip_merge(curr_path):
+def run_git_merge(curr_path):
     # CASE: may or may not be merged
     # src branch's latest commit should be in one of dest branch's commits
     # otherwise there may be files which were changed and cannot be merged
     src_branch_name = get_curr_branch_name(curr_path)
-    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_branch_path = f"{curr_path}/.git/branches/{src_branch_name}"
     src_commit_num_list = get_branch_num_list(curr_path, src_branch_name)
     src_commit_num = src_commit_num_list[0]
-    src_commit_path = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+    src_commit_path = f"{curr_path}/.git/commits/commit{src_commit_num}"
     
     # consider if we were given a commit number
     if re.search(r"^\d+$", sys.argv[1]):
@@ -277,10 +271,10 @@ def run_grip_merge(curr_path):
     else:
         dest_branch_name = sys.argv[1]
 
-    dest_branch_path = f"{curr_path}/.grip/branches/{dest_branch_name}"
+    dest_branch_path = f"{curr_path}/.git/branches/{dest_branch_name}"
     dest_commit_num_list = get_branch_num_list(curr_path, dest_branch_name)
     dest_commit_num = dest_commit_num_list[0]
-    dest_commit_path = f"{curr_path}/.grip/commits/commit{dest_commit_num}"
+    dest_commit_path = f"{curr_path}/.git/commits/commit{dest_commit_num}"
 
     # if dest latest commit already exists as one of src commits, then no need to update
     if dest_commit_num in src_commit_num_list:
@@ -301,12 +295,12 @@ def run_grip_merge(curr_path):
         
 # This is the main function in this file
 # We retrieve the basepath and execute the error checks
-# and if passing, it actions on grip-merge
+# and if passing, it actions on git-merge
 # note that the run function does additional error checks
 def main():
     curr_path = os.path.abspath(os.getcwd())
-    error_grip_merge(curr_path)
-    run_grip_merge(curr_path)
+    error_git_merge(curr_path)
+    run_git_merge(curr_path)
 
 if __name__ == "__main__":
     main()

@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 
-# Assignment 2: Grip
-# grip-commit
-#
-# This program was written by ILHA JUNG (z5421387)
-# <z5421387@ad.unsw.edu.au> on 28/07/2024
-#
 # Overview:
-# The grip-commit command saves a copy of all files in the 
+# The git-commit command saves a copy of all files in the 
 # index to the repository. A message describing the commit must 
 # be included as part of the commit command. The -a option will
 # have all files in the index to have their contents added before
@@ -18,7 +12,7 @@ import os, sys, re, shutil, filecmp
 # This helper returns the name of the current branch
 def get_curr_branch_name(curr_path):
     # get the branch we are currently on
-    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+    with open(f"{curr_path}/.git/CURRENT_BRANCH", "r") as file:
         return file.readline()  
 
 # This helper returns a list of all the directories
@@ -45,7 +39,7 @@ def get_list_of_files(pathname):
 # that are in the current branch
 def get_commit_num_list(curr_path):
     src_branch_name = get_curr_branch_name(curr_path)
-    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_branch_path = f"{curr_path}/.git/branches/{src_branch_name}"
     src_commit_list = get_list_of_files(src_branch_path)
     return sorted(names_to_int(src_commit_list) ,reverse=True)
 
@@ -89,7 +83,7 @@ def set_message(message_path, message):
 # otherwise we push on to make a commit
 def check_commit_req(curr_path, index_path, index_list):
     src_commit_num = get_commit_num_list(curr_path)[0]
-    latest_commit = f"{curr_path}/.grip/commits/commit{src_commit_num}"
+    latest_commit = f"{curr_path}/.git/commits/commit{src_commit_num}"
     latest_commit_list = get_list_of_files(latest_commit)
     # for each index file, check in latest commit
     for index_file in index_list:
@@ -119,7 +113,7 @@ def check_commit_req(curr_path, index_path, index_list):
 # the commit was made on
 def create_commit_ref(curr_path, commit_num):
     branch_name = get_curr_branch_name(curr_path)
-    branch_path = f"{curr_path}/.grip/branches/{branch_name}"
+    branch_path = f"{curr_path}/.git/branches/{branch_name}"
     with open(f"{branch_path}/{commit_num}", "w") as commit_ref:
         commit_ref.write(f"successfully referenced commit{commit_num}")
 
@@ -144,38 +138,38 @@ def create_new_commit(curr_path, commits_path, commit_dirs_list, index_path, ind
     # we will also create a reference to this commit for our current branch
     create_commit_ref(curr_path, commit_num)
 
-# Error checks for grip-commit:
+# Error checks for git-commit:
 # These checks are done prior to making any changes
 # such that if an error hits then we exit with an
 # error message to stderr and exit status of 1
-def error_grip_commit(curr_path):
-    # error check .grip does not exist
-    if not os.path.exists(f"{curr_path}/.grip"):
-        print(f"grip-commit: error: grip repository directory .grip not found", file=sys.stderr)
+def error_git_commit(curr_path):
+    # error check .git does not exist
+    if not os.path.exists(f"{curr_path}/.git"):
+        print(f"git-commit: error: git repository directory .git not found", file=sys.stderr)
         sys.exit(1)
 
     # error check incorrect command using [-m] and/or [-a] option
     if len(sys.argv) < 3:
-        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        print(f"usage: git-commit [-a] -m commit-message", file=sys.stderr)
         sys.exit(1)        
     if len(sys.argv) == 3 and sys.argv[1] != "-m":
-        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        print(f"usage: git-commit [-a] -m commit-message", file=sys.stderr)
         sys.exit(1)    
     if len(sys.argv) == 4:
         if sys.argv[1] != "-a" or sys.argv[2] != "-m":
-            print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+            print(f"usage: git-commit [-a] -m commit-message", file=sys.stderr)
             sys.exit(1)
     if len(sys.argv) > 4:
-        print(f"usage: grip-commit [-a] -m commit-message", file=sys.stderr)
+        print(f"usage: git-commit [-a] -m commit-message", file=sys.stderr)
         sys.exit(1)
 
-# This is the core of running grip-commit where we will
+# This is the core of running git-commit where we will
 # exit with the status of 0. We first run checks to see if there is
 # nothing to commit. If we do need to make a commit, then add all files
 # from the index directory into the new commit directory
-def run_grip_commit(curr_path):
+def run_git_commit(curr_path):
 
-    index_path = f"{curr_path}/.grip/index"
+    index_path = f"{curr_path}/.git/index"
     # [-a] flag case, add all files in index from current directory
     # function that deals with -a
     if sys.argv[1] == "-a":
@@ -183,7 +177,7 @@ def run_grip_commit(curr_path):
     # create list of files in index:
     index_list = get_list_of_files(index_path)
     # create list of commit_dirs in commits_path
-    commits_path = f"{curr_path}/.grip/commits"
+    commits_path = f"{curr_path}/.git/commits"
     commit_dirs_list = get_list_of_dirs(commits_path)        
     
     # if this is the first commit and there is no index files then 
@@ -201,11 +195,11 @@ def run_grip_commit(curr_path):
 
 # This is the main function in this file
 # We retrieve the basepath and execute the error checks
-# and if passing, it actions on grip-commit
+# and if passing, it actions on git-commit
 def main():
     curr_path = os.path.abspath(os.getcwd())
-    error_grip_commit(curr_path)
-    run_grip_commit(curr_path)
+    error_git_commit(curr_path)
+    run_git_commit(curr_path)
 
 if __name__ == "__main__":
     main()

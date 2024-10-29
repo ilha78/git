@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 
-# Assignment 2: Grip
-# grip-branch
-#
-# This program was written by ILHA JUNG (z5421387)
-# <z5421387@ad.unsw.edu.au> on 03/08/2024
-#
 # Overview:
-# grip-branch either creates a branch, deletes a branch, 
+# git-branch either creates a branch, deletes a branch, 
 # or lists current branch names. If branch-name is omitted, 
 # the names of all branches are listed. If branch-name is specified, 
 # then a branch with that name is created or deleted,
@@ -18,7 +12,7 @@ import sys, re, os, shutil
 # This helper returns the name of the current branch
 def get_curr_branch_name(curr_path):
     # get the branch we are currently on
-    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+    with open(f"{curr_path}/.git/CURRENT_BRANCH", "r") as file:
         return file.readline()  
 
 # This helper returns a list of all the directories
@@ -45,7 +39,7 @@ def get_list_of_files(pathname):
 # that are in the current branch
 def get_commit_num_list(curr_path):
     src_branch_name = get_curr_branch_name(curr_path)
-    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_branch_path = f"{curr_path}/.git/branches/{src_branch_name}"
     src_commit_list = get_list_of_files(src_branch_path)
     return sorted(names_to_int(src_commit_list) ,reverse=True)
 
@@ -57,45 +51,45 @@ def names_to_int(list_files):
 # This helper prints all the branches when we want
 # to list branches
 def print_all_branches(curr_path):
-    branches_path = f"{curr_path}/.grip/branches"
+    branches_path = f"{curr_path}/.git/branches"
     branch_list = sorted(get_list_of_dirs(branches_path))
     for branch in branch_list:
         print(f"{branch}")
 
-# Extended error checks for grip-branch:
+# Extended error checks for git-branch:
 # This is mainly for when creating a branch that already
 # exists or deleting a branch under invalid circumstances
-def error_extended_grip_branch(curr_path):
+def error_extended_git_branch(curr_path):
     # using -d but no branch name specified
     if sys.argv[1] == "-d" and len(sys.argv) == 2:
-        print(f"grip-branch: error: branch name required", file=sys.stderr)
+        print(f"git-branch: error: branch name required", file=sys.stderr)
         sys.exit(1)
 
     # error check for creating a branch
     if not sys.argv[1] == "-d":
         # branch already exists when trying to create
         new_branch_name = sys.argv[1]
-        new_branch_path = f"{curr_path}/.grip/branches/{new_branch_name}"
+        new_branch_path = f"{curr_path}/.git/branches/{new_branch_name}"
         if os.path.exists(new_branch_path):
-            print(f"grip-branch: error: branch '{new_branch_name}' already exists", file=sys.stderr)
+            print(f"git-branch: error: branch '{new_branch_name}' already exists", file=sys.stderr)
             sys.exit(1)
 
     # error check for deleting a branch
     else:
         delete_branch_name = sys.argv[2]
-        delete_branch_path = f"{curr_path}/.grip/branches/{delete_branch_name}"
+        delete_branch_path = f"{curr_path}/.git/branches/{delete_branch_name}"
         if not os.path.exists(delete_branch_path):
-            print(f"grip-branch: error: branch '{delete_branch_name}' doesn't exist", file=sys.stderr)
+            print(f"git-branch: error: branch '{delete_branch_name}' doesn't exist", file=sys.stderr)
             sys.exit(1)
 
         if delete_branch_name == "trunk":
-            print(f"grip-branch: error: can not delete branch '{delete_branch_name}': default branch", file=sys.stderr)
+            print(f"git-branch: error: can not delete branch '{delete_branch_name}': default branch", file=sys.stderr)
             sys.exit(1)
         
         # deleting the branch we are currently on
         current_branch = get_curr_branch_name(curr_path)
         if current_branch == delete_branch_name:
-            print(f"grip-branch: error: can not delete branch '{delete_branch_name}': current branch", file=sys.stderr)
+            print(f"git-branch: error: can not delete branch '{delete_branch_name}': current branch", file=sys.stderr)
             sys.exit(1)
         
         # deleting an unmerged branch, check if the specified branch's
@@ -104,52 +98,52 @@ def error_extended_grip_branch(curr_path):
         delete_commit_list = get_list_of_files(delete_branch_path)
         delete_commit_num = sorted(names_to_int(delete_commit_list), reverse=True)[0]
         if not delete_commit_num in current_commit_num_list:
-            print(f"grip-branch: error: branch '{delete_branch_name}' has unmerged changes", file=sys.stderr)
+            print(f"git-branch: error: branch '{delete_branch_name}' has unmerged changes", file=sys.stderr)
             sys.exit(1)
 
-# Error checks for grip-branch:
+# Error checks for git-branch:
 # These checks are done prior to making any changes
 # such that if an error hits then we exit with an
 # error message to stderr and exit status of 1
-def error_grip_branch(curr_path):
-    # error check .grip does not exist
-    grip_dir = os.path.join(curr_path, ".grip")
-    if not os.path.exists(grip_dir):
-        print(f"grip-branch: error: grip repository directory .grip not found", file=sys.stderr)
+def error_git_branch(curr_path):
+    # error check .git does not exist
+    git_dir = os.path.join(curr_path, ".git")
+    if not os.path.exists(git_dir):
+        print(f"git-branch: error: git repository directory .git not found", file=sys.stderr)
         sys.exit(1)
     
-    # running grip-branch before first commit
-    commits_path = f"{curr_path}/.grip/commits"
+    # running git-branch before first commit
+    commits_path = f"{curr_path}/.git/commits"
     commits_list = get_list_of_dirs(commits_path)
     if len(commits_list) == 0:
-        print(f"grip-branch: error: this command can not be run until after the first commit", file=sys.stderr)
+        print(f"git-branch: error: this command can not be run until after the first commit", file=sys.stderr)
         sys.exit(1)
 
     # more than 3 args
     if len(sys.argv) > 3:
-        print(f"usage: grip-branch [-d] <branch>", file=sys.stderr)
+        print(f"usage: git-branch [-d] <branch>", file=sys.stderr)
         sys.exit(1) 
 
     # did not use -d and more than 2 args
     if len(sys.argv) > 2 and not sys.argv[1] == "-d":
-        print(f"usage: grip-branch [-d] <branch>", file=sys.stderr)
+        print(f"usage: git-branch [-d] <branch>", file=sys.stderr)
         sys.exit(1) 
 
     # any options that is not -d
     for arg in sys.argv[1:]:
         if re.search("^-", arg) and not arg == "-d":
-            print(f"usage: grip-branch [-d] <branch>", file=sys.stderr)
+            print(f"usage: git-branch [-d] <branch>", file=sys.stderr)
             sys.exit(1)
     
-    # grip-branch was given subseq args
+    # git-branch was given subseq args
     if len(sys.argv) > 1:
-        error_extended_grip_branch(curr_path)
+        error_extended_git_branch(curr_path)
 
 
-# This function is responsible for actioning grip-branch
+# This function is responsible for actioning git-branch
 # when the error checks all passes. The three cases in the 
 # success are listing, creating, deleting branches
-def run_grip_branch(curr_path):
+def run_git_branch(curr_path):
 
     # no subsequent args, so print names of all branches
     if len(sys.argv) == 1:
@@ -160,10 +154,10 @@ def run_grip_branch(curr_path):
     # branch name is given so create a new branch and add all parent's commits
     if len(sys.argv) == 2:
         new_branch_name = sys.argv[1]
-        new_branch_path = f"{curr_path}/.grip/branches/{new_branch_name}"
+        new_branch_path = f"{curr_path}/.git/branches/{new_branch_name}"
 
         current_branch = get_curr_branch_name(curr_path)
-        current_branch_path = f"{curr_path}/.grip/branches/{current_branch}"
+        current_branch_path = f"{curr_path}/.git/branches/{current_branch}"
 
         # the current branch will be the parent of the new branch
         # so add all the parent's commit referneces
@@ -174,7 +168,7 @@ def run_grip_branch(curr_path):
     # else we would have 2 subsequet arg, so delete the specified branch
     else:
         delete_branch_name = sys.argv[2]
-        delete_branch_path = f"{curr_path}/.grip/branches/{delete_branch_name}"
+        delete_branch_path = f"{curr_path}/.git/branches/{delete_branch_name}"
         shutil.rmtree(delete_branch_path)
         print(f"Deleted branch '{delete_branch_name}'")
         sys.exit(0)
@@ -182,11 +176,11 @@ def run_grip_branch(curr_path):
 
 # This is the main function in this file
 # We retrieve the basepath and execute the error checks
-# and if passing, it actions on grip-branch
+# and if passing, it actions on git-branch
 def main():
     curr_path = os.path.abspath(os.getcwd())
-    error_grip_branch(curr_path)
-    run_grip_branch(curr_path)
+    error_git_branch(curr_path)
+    run_git_branch(curr_path)
 
 if __name__ == "__main__":
     main()

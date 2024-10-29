@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
 
-# Assignment 2: Grip
-# grip-log
-#
-# This program was written by ILHA JUNG (z5421387)
-# <z5421387@ad.unsw.edu.au> on 28/07/2024
-#
 # Overview:
-# The grip-show should print the contents of the specified filename 
+# The git-show should print the contents of the specified filename 
 # as of the specified commit. If commit is omitted, the contents of 
 # the file in the index should be printed.
 
@@ -16,7 +10,7 @@ import sys, re, os
 # This helper returns the name of the current branch
 def get_curr_branch_name(curr_path):
     # get the branch we are currently on
-    with open(f"{curr_path}/.grip/CURRENT_BRANCH", "r") as file:
+    with open(f"{curr_path}/.git/CURRENT_BRANCH", "r") as file:
         return file.readline()  
 
 # This helper returns a list of all the directories
@@ -43,7 +37,7 @@ def get_list_of_files(pathname):
 # that are in the current branch
 def get_commit_num_list(curr_path):
     src_branch_name = get_curr_branch_name(curr_path)
-    src_branch_path = f"{curr_path}/.grip/branches/{src_branch_name}"
+    src_branch_path = f"{curr_path}/.git/branches/{src_branch_name}"
     src_commit_list = get_list_of_files(src_branch_path)
     return sorted(names_to_int(src_commit_list) ,reverse=True)
 
@@ -62,59 +56,59 @@ def get_commit_num_filename():
     filename = delimiter.join(separate[1:])
     return commit_num, filename
 
-# Error checks for grip-show:
+# Error checks for git-show:
 # These checks are done prior to making any changes
 # such that if an error hits then we exit with an
 # error message to stderr and exit status of 1
-def error_grip_show(curr_path):
-    # error check .grip does not exist
-    if not os.path.exists(f"{curr_path}/.grip"):
-        print(f"grip-show: error: grip repository directory .grip not found", file=sys.stderr)
+def error_git_show(curr_path):
+    # error check .git does not exist
+    if not os.path.exists(f"{curr_path}/.git"):
+        print(f"git-show: error: git repository directory .git not found", file=sys.stderr)
         sys.exit(1)
 
     # error check incorrect args
     if len(sys.argv) != 2 or not re.search(":", sys.argv[1]):
-        print(f"usage: grip-show <commit>:<filename>", file=sys.stderr)
+        print(f"usage: git-show <commit>:<filename>", file=sys.stderr)
         sys.exit(1)
 
     commit_num, filename = get_commit_num_filename()
-    commit_path = f"{curr_path}/.grip/commits/commit{commit_num}"
+    commit_path = f"{curr_path}/.git/commits/commit{commit_num}"
     # error check unknown commit
     if not os.path.exists(commit_path) and not commit_num == "":
-        print(f"grip-show: error: unknown commit '{commit_num}'", file=sys.stderr)
+        print(f"git-show: error: unknown commit '{commit_num}'", file=sys.stderr)
         sys.exit(1)
 
     # error check filename is invalid
     if not re.search("^[a-zA-Z0-9][a-zA-Z0-9._-]*", filename):
-        print(f"grip-show: error: invalid filename '{filename}'", file=sys.stderr)
+        print(f"git-show: error: invalid filename '{filename}'", file=sys.stderr)
         sys.exit(1)
 
     # error check no specified commit and file is not in index
-    filepath = f"{curr_path}/.grip/index/{filename}"
+    filepath = f"{curr_path}/.git/index/{filename}"
     if commit_num == "" and not os.path.isfile(filepath):
-        print(f"grip-show: error: '{filename}' not found in index", file=sys.stderr)
+        print(f"git-show: error: '{filename}' not found in index", file=sys.stderr)
         sys.exit(1)
 
     # error when the file is not in specified commit
     src_commit_num_list = get_commit_num_list(curr_path)
-    commit_filepath = f"{curr_path}/.grip/commits/commit{commit_num}/{filename}"
+    commit_filepath = f"{curr_path}/.git/commits/commit{commit_num}/{filename}"
     if not commit_num == "" and not commit_num in src_commit_num_list:
         if not os.path.isfile(commit_filepath):
-            print(f"grip-show: error: '{filename}' not found in commit {commit_num}", file=sys.stderr)
+            print(f"git-show: error: '{filename}' not found in commit {commit_num}", file=sys.stderr)
             sys.exit(1)
 
 # When not specified the commit number, then print out the file
 # in the index. Otherwise, find the specified commit and print
 # that version of the file
-def run_grip_show(curr_path):
+def run_git_show(curr_path):
     filepath = curr_path
     commit_num, filename = get_commit_num_filename()
     # commit unspecified case
     if commit_num == "":
-        commit_filepath = f"{curr_path}/.grip/index/{filename}"
+        commit_filepath = f"{curr_path}/.git/index/{filename}"
     # given commit number
     else:
-        commit_filepath = f"{curr_path}/.grip/commits/commit{commit_num}/{filename}"
+        commit_filepath = f"{curr_path}/.git/commits/commit{commit_num}/{filename}"
     # print out the content of the file version
     with open(commit_filepath, "r") as file:
         for line in file:
@@ -122,11 +116,11 @@ def run_grip_show(curr_path):
 
 # This is the main function in this file
 # We retrieve the basepath and execute the error checks
-# and if passing, it actions on grip-show
+# and if passing, it actions on git-show
 def main():
     curr_path = os.path.abspath(os.getcwd())
-    error_grip_show(curr_path)
-    run_grip_show(curr_path)
+    error_git_show(curr_path)
+    run_git_show(curr_path)
 
 if __name__ == "__main__":
     main()

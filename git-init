@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+
+# Overview:
+# This file is responsible for creating the .git
+# directory where all the information about index,
+# branches, commits will be stored
+
+import os, sys
+
+# Error check for git-init:
+# if .git already exists. If so we should not
+# create another .git and hence return a message
+# in stderr with exit status of 0
+def error_git_init(curr_path):
+    if os.path.exists(f"{curr_path}/.git"):
+        print(f"git-init: error: .git already exists", file=sys.stderr)
+        sys.exit(1)
+
+# Actions on the git-init cmd given that we pass all
+# the error checks. The steps are as follows:
+# create .git directory
+# create index, commits, branches in .git
+# create trunk in branches 
+def run_git_init(curr_path):
+    os.mkdir(f"{curr_path}/.git")
+    print(f"Initialized empty git repository in .git")
+
+    # mkdir for "index" and "commits" and "branches"
+    os.mkdir(f"{curr_path}/.git/index")
+    os.mkdir(f"{curr_path}/.git/commits")
+    os.mkdir(f"{curr_path}/.git/branches")
+
+    # This keeps track of which branch we are currently on
+    with open(f"{curr_path}/.git/CURRENT_BRANCH", "w") as file:
+        file.write("trunk")
+
+    # Create default branch
+    os.mkdir(f"{curr_path}/.git/branches/trunk")
+
+# This is the main function in this file
+# We retrieve the basepath and execute the error checks
+# and if passing, it actions on git-init
+def main():
+    curr_path = os.path.abspath(os.getcwd())
+    error_git_init(curr_path)
+    run_git_init(curr_path)
+
+if __name__ == "__main__":
+    main()
