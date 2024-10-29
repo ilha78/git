@@ -2,7 +2,9 @@
 
 ## Setup
 
-Clone the repository and make sure to **delete .git** before running any of the scripts as the actual git will conflict in names with my git. Run `PATH="$PATH:$(pwd)"` to avoid having to prefix `./` for each script execution.
+Clone the repository and make sure to **delete .git** before running any of the scripts as the actual git will conflict in names with my git (can be done by running `rm -rf .git` on Linux). 
+
+Run `PATH="$PATH:$(pwd)"` to avoid having to prefix `./` for each script execution.
 
 ## Available scripts
 
